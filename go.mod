@@ -1,4 +1,4 @@
-module github.com/simon-tl/ckb-sdk-go/develop
+module github.com/simon-tl/ckb-sdk-go/v2
 
 go 1.17
 
