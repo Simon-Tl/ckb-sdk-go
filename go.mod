@@ -1,10 +1,13 @@
 module github.com/simon-tl/ckb-sdk-go/v2
 
+replace github.com/nervosnetwork/ckb-sdk-go/v2 => github.com/simon-tl/ckb-sdk-go/v2 v2.2.1-0.20240826052257-7d50f87bc58a
+
 go 1.17
 
 require (
 	github.com/ethereum/go-ethereum v1.9.14
 	github.com/minio/blake2b-simd v0.0.0-20160723061019-3f5f724cb5b1
+	github.com/nervosnetwork/ckb-sdk-go/v2 v2.0.0-00010101000000-000000000000
 	github.com/pkg/errors v0.8.1
 	github.com/stretchr/testify v1.4.0
 )
