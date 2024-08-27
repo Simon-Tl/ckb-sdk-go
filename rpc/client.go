@@ -471,7 +471,7 @@ func (cli *client) GetTransaction(ctx context.Context, hash types.Hash, onlyComm
 	if onlyCommitted == nil {
 		err = cli.c.CallContext(ctx, &result, "get_transaction", hash)
 	} else {
-		err = cli.c.CallContext(ctx, &result, "get_transaction", hash, *onlyCommitted)
+		err = cli.c.CallContext(ctx, &result, "get_transaction", hash, &onlyCommitted)
 	}
 	if err != nil {
 		return nil, err
