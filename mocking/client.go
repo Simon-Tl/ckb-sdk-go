@@ -76,7 +76,13 @@ func (c *MockClient) LoadMockingTestFromFile(t *testing.T, method string, params
 }
 
 func (c *MockClient) Expect(msg *jsonrpcMessage, jsonData []byte) *MockClient {
-	c.mockJson.On("mockJsonRPC", msg).Return(jsonData)
+	//c.mockJson.On("mockJsonRPC", msg).Return(jsonData)
+	//return c
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal jsonrpcMessage: %v", err))
+	}
+	c.mockJson.On("mockJsonRPC", msgBytes).Return(jsonData)
 	return c
 }
 
