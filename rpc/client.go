@@ -49,22 +49,22 @@ type Client interface {
 	GetPackedBlockWithCycles(ctx context.Context, hash types.Hash) (*types.BlockWithCycles, error)
 
 	// GetHeader returns the information about a block header by hash.
-	GetHeader(ctx context.Context, hash types.Hash) (*types.Header, error)
+	GetHeader(ctx context.Context, hash types.Hash, verbosity *uint32) (*types.Header, error)
 
 	// GetHeaderVerbosity0 returns the information about a block header by hash, but with verbosity specified to 0.
 	GetPackedHeader(ctx context.Context, hash types.Hash) (*types.Header, error)
 
 	// GetHeaderByNumber returns the information about a block header by block number.
-	GetHeaderByNumber(ctx context.Context, number uint64) (*types.Header, error)
+	GetHeaderByNumber(ctx context.Context, number uint64, verbosity *uint32) (*types.Header, error)
 
 	// GetHeaderByNumberVerbosity0 returns the information about a block header by block number.
-	GetPackedHeaderByNumber(ctx context.Context, number uint64) (*types.Header, error)
+	GetPackedHeaderByNumber(ctx context.Context, number uint64, verbosity *uint32) (*types.Header, error)
 	// GetLiveCell returns the information about a cell by out_point if it is live.
 	// If second with_data argument set to true, will return cell data and data_hash if it is live.
 	GetLiveCell(ctx context.Context, outPoint *types.OutPoint, withData bool, includeTxPool *bool) (*types.CellWithStatus, error)
 
 	// GetTransaction returns the information about a transaction requested by transaction hash.
-	GetTransaction(ctx context.Context, hash types.Hash, onlyCommitted *bool) (*types.TransactionWithStatus, error)
+	GetTransaction(ctx context.Context, hash types.Hash, verbosity *uint32, onlyCommitted *bool) (*types.TransactionWithStatus, error)
 
 	// GetBlockEconomicState return block economic state, It includes the rewards details and when it is finalized.
 	GetBlockEconomicState(ctx context.Context, hash types.Hash) (*types.BlockEconomicState, error)
@@ -82,10 +82,10 @@ type Client interface {
 	VerifyTransactionAndWitnessProof(ctx context.Context, proof *types.TransactionAndWitnessProof) ([]*types.Hash, error)
 
 	// GetBlockByNumber get block by number
-	GetBlockByNumber(ctx context.Context, number uint64) (*types.Block, error)
+	GetBlockByNumber(ctx context.Context, number uint64, verbosity *uint32) (*types.Block, error)
 
 	// GetBlockByNumber get block by number
-	GetBlockByNumberWithCycles(ctx context.Context, number uint64) (*types.BlockWithCycles, error)
+	GetBlockByNumberWithCycles(ctx context.Context, number uint64, verbosity *uint32) (*types.BlockWithCycles, error)
 
 	// GetForkBlock The RPC returns a fork block or null. When the RPC returns a block, the block hash must equal to the parameter block_hash.
 	GetForkBlock(ctx context.Context, blockHash types.Hash) (*types.Block, error)
@@ -127,7 +127,7 @@ type Client interface {
 	// GetBannedAddresses returns all banned IPs/Subnets.
 	GetBannedAddresses(ctx context.Context) ([]*types.BannedAddress, error)
 
-	// ClearBannedAddress returns all banned IPs/Subnets.
+	// ClearBannedAddresses returns all banned IPs/Subnets.
 	ClearBannedAddresses(ctx context.Context) error
 
 	// SetBan insert or delete an IP/Subnet from the banned list
@@ -152,6 +152,9 @@ type Client interface {
 	// SendTransaction send new transaction into transaction pool.
 	SendTransaction(ctx context.Context, tx *types.Transaction) (*types.Hash, error)
 
+	// SendTestTransaction send new transaction into transaction pool.
+	SendTestTransaction(ctx context.Context, tx *types.Transaction) (*types.Hash, error)
+
 	/// Test if a transaction can be accepted by the transaction pool without inserting it into the pool or rebroadcasting it to peers.
 	/// The parameters and errors of this method are the same as `send_transaction`.
 	TestTxPoolAccept(ctx context.Context, tx *types.Transaction) (*types.EntryCompleted, error)
@@ -161,11 +164,28 @@ type Client interface {
 
 	GetPoolTxDetailInfo(ctx context.Context, hash types.Hash) (*types.PoolTxDetailInfo, error)
 
+	GenerateBlock(ctx context.Context) (*types.Hash, error)
+
+	GenerateBlockWithTemplate(ctx context.Context, block_template types.BlockTemplate) (*types.Hash, error)
+
+	Truncate(ctx context.Context, target types.Hash) error
+
+	RemoveTransaction(ctx context.Context, tx_hash types.Hash) (bool, error)
+
+	SendAlert(ctx context.Context, alert types.AlertMessage) error
+
+	GetBlockTemplate(ctx context.Context) (types.BlockTemplate, error)
+
+	TxPoolReady(ctx context.Context) (bool, error)
+
 	// GetRawTxPool Returns all transaction ids in tx pool as a json array of string transaction ids.
-	GetRawTxPool(ctx context.Context) (*types.RawTxPool, error)
+	GetRawTxPool(ctx context.Context, verbose *bool) (*types.RawTxPool, error)
 
 	// ClearTxPool Removes all transactions from the transaction pool.
 	ClearTxPool(ctx context.Context) error
+
+	// Removes all transactions from the verification queue.
+	ClearTxVerifyQueue(ctx context.Context) error
 
 	////// Stats
 	// GetBlockchainInfo return state info of blockchain
@@ -354,9 +374,16 @@ func (cli *client) GetPackedBlockWithCycles(ctx context.Context, hash types.Hash
 	return result, nil
 }
 
-func (cli *client) GetHeader(ctx context.Context, hash types.Hash) (*types.Header, error) {
+func (cli *client) GetHeader(ctx context.Context, hash types.Hash, verbosity *uint32) (*types.Header, error) {
 	var result types.Header
-	err := cli.c.CallContext(ctx, &result, "get_header", hash)
+
+	// if verbosityi is nil, let it be 1
+	var hexVerbosity = hexutil.Uint64(1)
+	if verbosity != nil {
+		hexVerbosity = hexutil.Uint64(*verbosity)
+	}
+
+	err := cli.c.CallContext(ctx, &result, "get_header", hash, hexVerbosity)
 	if err != nil {
 		return nil, err
 	}
@@ -380,16 +407,23 @@ func (cli *client) GetPackedHeader(ctx context.Context, hash types.Hash) (*types
 	return types.UnpackHeader(rawHeader), nil
 }
 
-func (cli *client) GetHeaderByNumber(ctx context.Context, number uint64) (*types.Header, error) {
+func (cli *client) GetHeaderByNumber(ctx context.Context, number uint64, verbosity *uint32) (*types.Header, error) {
 	var result types.Header
-	err := cli.c.CallContext(ctx, &result, "get_header_by_number", hexutil.Uint64(number))
+
+	// if verbosityi is nil, let it be 1
+	var hexVerbosity = hexutil.Uint64(1)
+	if verbosity != nil {
+		hexVerbosity = hexutil.Uint64(*verbosity)
+	}
+
+	err := cli.c.CallContext(ctx, &result, "get_header_by_number", hexutil.Uint64(number), hexVerbosity)
 	if err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-func (cli *client) GetPackedHeaderByNumber(ctx context.Context, number uint64) (*types.Header, error) {
+func (cli *client) GetPackedHeaderByNumber(ctx context.Context, number uint64, verbosity *uint32) (*types.Header, error) {
 	var headerHash string
 	err := cli.c.CallContext(ctx, &headerHash, "get_header_by_number", hexutil.Uint64(number), hexutil.Uint64(0))
 	if err != nil {
@@ -465,13 +499,19 @@ func (cli *client) GetLiveCell(ctx context.Context, point *types.OutPoint, withD
 	return &result, err
 }
 
-func (cli *client) GetTransaction(ctx context.Context, hash types.Hash, onlyCommitted *bool) (*types.TransactionWithStatus, error) {
+func (cli *client) GetTransaction(ctx context.Context, hash types.Hash, verbosity *uint32, onlyCommitted *bool) (*types.TransactionWithStatus, error) {
 	var result types.TransactionWithStatus
 	var err error
+	// if verbosity is nil, let it be 2
+	var hexVerbosity = hexutil.Uint64(2)
+	if verbosity != nil {
+		hexVerbosity = hexutil.Uint64(*verbosity)
+	}
+
 	if onlyCommitted == nil {
-		err = cli.c.CallContext(ctx, &result, "get_transaction", hash)
+		err = cli.c.CallContext(ctx, &result, "get_transaction", hash, hexVerbosity)
 	} else {
-		err = cli.c.CallContext(ctx, &result, "get_transaction", hash, *onlyCommitted)
+		err = cli.c.CallContext(ctx, &result, "get_transaction", hash, hexVerbosity, *onlyCommitted)
 	}
 	if err != nil {
 		return nil, err
@@ -479,9 +519,14 @@ func (cli *client) GetTransaction(ctx context.Context, hash types.Hash, onlyComm
 	return &result, nil
 }
 
-func (cli *client) GetBlockByNumber(ctx context.Context, number uint64) (*types.Block, error) {
+func (cli *client) GetBlockByNumber(ctx context.Context, number uint64, verbosity *uint32) (*types.Block, error) {
 	var result types.Block
-	err := cli.c.CallContext(ctx, &result, "get_block_by_number", hexutil.Uint64(number))
+	var hexVerbosity = hexutil.Uint64(2)
+	if verbosity != nil {
+		hexVerbosity = hexutil.Uint64(*verbosity)
+	}
+
+	err := cli.c.CallContext(ctx, &result, "get_block_by_number", hexutil.Uint64(number), hexVerbosity)
 	if err != nil {
 		return nil, err
 	}
@@ -491,9 +536,13 @@ func (cli *client) GetBlockByNumber(ctx context.Context, number uint64) (*types.
 	return &result, nil
 }
 
-func (cli *client) GetBlockByNumberWithCycles(ctx context.Context, number uint64) (*types.BlockWithCycles, error) {
+func (cli *client) GetBlockByNumberWithCycles(ctx context.Context, number uint64, verbosity *uint32) (*types.BlockWithCycles, error) {
 	var result types.BlockWithCycles
-	err := cli.c.CallContext(ctx, &result, "get_block_by_number", hexutil.Uint64(number), nil, true)
+	var hexVerbosity = hexutil.Uint64(2)
+	if verbosity != nil {
+		hexVerbosity = hexutil.Uint64(*verbosity)
+	}
+	err := cli.c.CallContext(ctx, &result, "get_block_by_number", hexutil.Uint64(number), hexVerbosity, true)
 	if err != nil {
 		return nil, err
 	}
@@ -685,6 +734,17 @@ func (cli *client) SendTransaction(ctx context.Context, tx *types.Transaction) (
 	return &result, err
 }
 
+func (cli *client) SendTestTransaction(ctx context.Context, tx *types.Transaction) (*types.Hash, error) {
+	var result types.Hash
+
+	err := cli.c.CallContext(ctx, &result, "send_test_transaction", *tx, "passthrough")
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, err
+}
+
 // TestTxPoolAccept(ctx context.Context, tx *types.Transaction) (*types.EntryCompleted, error)
 func (cli *client) TestTxPoolAccept(ctx context.Context, tx *types.Transaction) (*types.EntryCompleted, error) {
 	var result types.EntryCompleted
@@ -698,7 +758,7 @@ func (cli *client) TestTxPoolAccept(ctx context.Context, tx *types.Transaction) 
 
 func (cli *client) GetPoolTxDetailInfo(ctx context.Context, hash types.Hash) (*types.PoolTxDetailInfo, error) {
 	var result types.PoolTxDetailInfo
-	err := cli.c.CallContext(ctx, &result, "get_pool_tx_detail", hash)
+	err := cli.c.CallContext(ctx, &result, "get_pool_tx_detail_info", hash)
 	if err != nil {
 		return nil, err
 	}
@@ -714,9 +774,14 @@ func (cli *client) TxPoolInfo(ctx context.Context) (*types.TxPoolInfo, error) {
 	return &result, nil
 }
 
-func (cli *client) GetRawTxPool(ctx context.Context) (*types.RawTxPool, error) {
+func (cli *client) GetRawTxPool(ctx context.Context, verbose *bool) (*types.RawTxPool, error) {
 	var txPool types.RawTxPool
-	err := cli.c.CallContext(ctx, &txPool, "get_raw_tx_pool")
+
+	if verbose == nil {
+		defaultVerbose := false
+		verbose = &defaultVerbose
+	}
+	err := cli.c.CallContext(ctx, &txPool, "get_raw_tx_pool", verbose)
 	if err != nil {
 		return nil, err
 	}
@@ -726,6 +791,10 @@ func (cli *client) GetRawTxPool(ctx context.Context) (*types.RawTxPool, error) {
 
 func (cli *client) ClearTxPool(ctx context.Context) error {
 	return cli.c.CallContext(ctx, nil, "clear_tx_pool")
+}
+
+func (cli *client) ClearTxVerifyQueue(ctx context.Context) error {
+	return cli.c.CallContext(ctx, nil, "clear_tx_verify_queue")
 }
 
 func (cli *client) GetBlockchainInfo(ctx context.Context) (*types.BlockchainInfo, error) {
@@ -894,4 +963,57 @@ func (cli *client) GenerateEpochs(ctx context.Context, numEpochs uint64) (uint64
 		return 0, err
 	}
 	return uint64(result), nil
+}
+
+func (cli *client) GenerateBlock(ctx context.Context) (*types.Hash, error) {
+	var result types.Hash
+	err := cli.c.CallContext(ctx, &result, "generate_block")
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (cli *client) GenerateBlockWithTemplate(ctx context.Context, block_template types.BlockTemplate) (*types.Hash, error) {
+	var result types.Hash
+	err := cli.c.CallContext(ctx, &result, "generate_block_with_template", block_template)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (cli *client) Truncate(ctx context.Context, target types.Hash) error {
+	return cli.c.CallContext(ctx, nil, "truncate", target)
+}
+
+func (cli *client) RemoveTransaction(ctx context.Context, tx_hash types.Hash) (bool, error) {
+	var result bool
+	err := cli.c.CallContext(ctx, &result, "remove_transaction", tx_hash)
+	if err != nil {
+		return false, err
+	}
+	return result, nil
+}
+
+func (cli *client) SendAlert(ctx context.Context, alert types.AlertMessage) error {
+	return cli.c.CallContext(ctx, nil, "send_alert", alert)
+}
+
+func (cli *client) GetBlockTemplate(ctx context.Context) (types.BlockTemplate, error) {
+	var result types.BlockTemplate
+	err := cli.c.CallContext(ctx, &result, "get_block_template")
+	if err != nil {
+		return types.BlockTemplate{}, err
+	}
+	return result, nil
+}
+
+func (cli *client) TxPoolReady(ctx context.Context) (bool, error) {
+	var result bool
+	err := cli.c.CallContext(ctx, &result, "tx_pool_ready")
+	if err != nil {
+		return false, err
+	}
+	return result, nil
 }

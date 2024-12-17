@@ -34,6 +34,8 @@ func NewDaoScriptHandler(network types.Network) *DaoScriptHandler {
 		txHash = types.HexToHash("0xe2fb199810d49a4d8beec56718ba2593b665db9d52299a0f9e6e75416d73ff5c")
 	} else if network == types.NetworkTest {
 		txHash = types.HexToHash("0x8f8c79eb6671709633fe6a46de93c0fedc9c1b8a6527a18d3983879542635c9f")
+	} else if network == types.NetworkPreview {
+		txHash = types.HexToHash("0xe93c55bea88e10c64d9b218ee2b504bc89b9e5ee912186ff904c1827360a5362")
 	} else {
 		return nil
 	}
@@ -102,7 +104,7 @@ type ClaimInfo struct {
 }
 
 func NewClaimInfo(client rpc.Client, withdrawOutpoint *types.OutPoint) (*ClaimInfo, error) {
-	txWithStatus, err := client.GetTransaction(context.Background(), withdrawOutpoint.TxHash, nil)
+	txWithStatus, err := client.GetTransaction(context.Background(), withdrawOutpoint.TxHash, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +113,7 @@ func NewClaimInfo(client rpc.Client, withdrawOutpoint *types.OutPoint) (*ClaimIn
 	var depositBlockHash types.Hash
 	for i := 0; i < len(withdrawTx.Inputs); i++ {
 		outPoint := withdrawTx.Inputs[i].PreviousOutput
-		txWithStatus, err := client.GetTransaction(context.Background(), outPoint.TxHash, nil)
+		txWithStatus, err := client.GetTransaction(context.Background(), outPoint.TxHash, nil, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -125,11 +127,11 @@ func NewClaimInfo(client rpc.Client, withdrawOutpoint *types.OutPoint) (*ClaimIn
 	if reflect.DeepEqual(depositBlockHash, types.Hash{}) {
 		return nil, errors.New("can't find deposit cell")
 	}
-	depositBlockHeader, err := client.GetHeader(context.Background(), depositBlockHash)
+	depositBlockHeader, err := client.GetHeader(context.Background(), depositBlockHash, nil)
 	if err != nil {
 		return nil, err
 	}
-	withdrawBlockHeader, err := client.GetHeader(context.Background(), *withdrawBlockHash)
+	withdrawBlockHeader, err := client.GetHeader(context.Background(), *withdrawBlockHash, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -175,12 +177,12 @@ type WithdrawInfo struct {
 }
 
 func NewWithdrawInfo(client rpc.Client, depositOutPoint *types.OutPoint) (*WithdrawInfo, error) {
-	txWithStatus, err := client.GetTransaction(context.Background(), depositOutPoint.TxHash, nil)
+	txWithStatus, err := client.GetTransaction(context.Background(), depositOutPoint.TxHash, nil, nil)
 	if err != nil {
 		return nil, err
 	}
 	depositBlockHash := txWithStatus.TxStatus.BlockHash
-	header, err := client.GetHeader(context.Background(), *depositBlockHash)
+	header, err := client.GetHeader(context.Background(), *depositBlockHash, nil)
 	if err != nil {
 		return nil, err
 	}
